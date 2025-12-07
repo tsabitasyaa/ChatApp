@@ -12,15 +12,10 @@ import {
 
 import {
   auth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  firestore,
-  setDoc,
-  doc,
+  firestore
 } from "../firebase";
 
 export default function LoginScreen() {
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegister, setIsRegister] = useState(false);
@@ -29,26 +24,22 @@ export default function LoginScreen() {
   const handleSubmit = async () => {
     try {
       if (isRegister) {
-        const userCred = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
+        const userCred = await auth().createUserWithEmailAndPassword(email, password);
+        const uid = userCred.user.uid;
 
-        await setDoc(doc(firestore, "users", userCred.user.uid), {
-          username: username,
-          email: email,
-          createdAt: new Date(),
+        // simpan profile di collection users dengan doc ID = uid
+        await firestore().collection('users').doc(uid).set({
+        username: username || 'User',
+        email,
+        createdAt: firestore.FieldValue.serverTimestamp(),
         });
 
-        Alert.alert("Sukses", "Akun berhasil dibuat!");
-
+        Alert.alert('Sukses', 'Akun berhasil dibuat!');
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        await auth().signInWithEmailAndPassword(email, password);
       }
-      // Tidak perlu navigate manual — App.tsx akan otomatis pindah ke Chat
-    } catch (err) {
-      Alert.alert("Error", (err as Error).message);
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? String(err));
     }
   };
 
@@ -60,11 +51,11 @@ export default function LoginScreen() {
 
         {isRegister && (
             <TextInput
-        style={styles.input}
-        placeholder="Username"
-        value={username}
-        onChangeText={setUsername}
-      />
+              style={styles.input}
+              placeholder="Username"
+              value={username}
+              onChangeText={setUsername}
+            />
         )}
 
       <TextInput

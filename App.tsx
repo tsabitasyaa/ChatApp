@@ -1,36 +1,40 @@
-//app/App.tsx
-import React, { useEffect, useState } from "react";
-import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+// App.tsx
+import React, { useEffect, useState } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { auth } from './firebase';
 
-import { auth } from "./firebase";
-import { onAuthStateChanged, User } from "firebase/auth";
 
-import LoginScreen from "./Screen/LoginScreen";
-import ChatScreen from "./Screen/ChatScreen";
+import LoginScreen from './Screen/LoginScreen'
+import ChatScreen from './Screen/ChatScreen';
+
 
 export type RootStackParamList = {
   Login: undefined;
   Chat: undefined;
 };
 
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
 
-    return () => unsub();
+  useEffect(() => {
+    const unsubscribe = auth().onAuthStateChanged((u) => {
+        setUser(u);
+        setLoading(false);
+      });
+
+      return () => unsubscribe();
   }, []);
 
-  // Optional loading screen
-  if (loading) return null;
+
+  if (loading) return null; // bisa ganti spinner
+
 
   return (
     <NavigationContainer>

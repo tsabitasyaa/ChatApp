@@ -12,19 +12,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   auth,
-  addDoc,
-  query,
-  orderBy,
-  onSnapshot,
-  collection,
   firestore,
+  storage,
 } from "../firebase";
-import { signOut } from "firebase/auth";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../App";
 import { launchImageLibrary } from "react-native-image-picker";
 import { Image } from "react-native";
-import storage from "@react-native-firebase/storage";
+import { saveChatHistory, loadChatHistory } from "../storage/chatCache";
 
 
 type MessageType = {
@@ -32,24 +25,21 @@ type MessageType = {
   text: string;
   user: string;
   imageUrl?: string;
-  createdAt: { seconds: number; nanoseconds: number } | null;
+  createdAt: any;
 };
 
-
-type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
-
-export default function ChatScreen({ route }: Props) {
-  const name = auth.currentUser?.email ?? "Unknown";
+export default function ChatScreen() {
+  const name = auth()?.currentUser?.email ?? "Unknown";
 
   const [message, setMessage] = useState<string>("");
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [usersMap, setUsersMap] = useState<Record<string, string>>({});
 
-
+  // map email to username
   useEffect(() => {
-    const unsub = onSnapshot(collection(firestore, "users"), (snapshot) => {
+    const unsub = firestore().collection('users').onSnapshot((snap) => {
       const map: Record<string, string> = {};
-      snapshot.docs.forEach((doc) => {
+      snap.docs.forEach((doc) => {
         const data = doc.data();
         map[data.email] = data.username;
       });
@@ -60,34 +50,41 @@ export default function ChatScreen({ route }: Props) {
     return () => unsub();
   }, []);
 
-
+  // fetch messages
   useEffect(() => {
-    const q = query(
-      collection(firestore, "messages"),
-      orderBy("createdAt", "asc")
-    );
+    // Load offline chat from MMKV
+    const local = loadChatHistory();
+    setMessages(local);
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map((doc) => ({
+    // realtime fetch from firestore
+    const q = firestore().collection('messages').orderBy('createdAt', 'asc');
+
+    const unsub = q.onSnapshot((snap) => {
+      const list = snap.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as MessageType[];
 
       setMessages(list);
+
+       // Save to MMKV for offline usage
+        saveChatHistory(list);
     });
 
     return () => unsub();
   }, []);
 
-
+  // send message
   const sendMessage = async () => {
-    if (!message.trim()) return;
+    const user = auth().currentUser;
 
-    await addDoc(collection(firestore, "messages"), {
+    if (!user) return;
+
+    await firestore().collection('messages').add({
       text: message,
       user: name,
       imageUrl: "",
-      createdAt: new Date(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
     });
 
     setMessage("");
@@ -95,7 +92,7 @@ export default function ChatScreen({ route }: Props) {
 
 
   const logoutHandler = () => {
-    signOut(auth);
+    auth().signOut()
   };
 
   const renderItem = ({ item }: { item: MessageType }) => (
@@ -154,7 +151,7 @@ export default function ChatScreen({ route }: Props) {
       const downloadURL = await uploadImage(uri);
       if (!downloadURL) return;
 
-    await addDoc(collection(firestore, "messages"), {
+    await firestore().collection('messages').add({
       text: "",
       imageUrl: downloadURL,
       user: name,
@@ -168,7 +165,7 @@ export default function ChatScreen({ route }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header Simple */}
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerText}>Chat</Text>
 
